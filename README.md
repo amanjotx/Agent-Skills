@@ -18,19 +18,21 @@ Who it's for: people running Cursor (or Claude / Codex with skills support) who 
 
 | Skill | What it does | When to use |
 | --- | --- | --- |
-| **hydrate** | Incremental sync of Hydra DB project memory from a git waypoint | After you've already ingested — keep memory current without a full remap |
-| **ingest** | Full bootstrap map of a codebase into Hydra DB, with a sync waypoint | First time (or reset) for a project — build the memory baseline |
+| **hydrate** | Incremental rewrite of the one `{project}-standing` Hydra memory from a git waypoint | After you've already ingested — keep standing current without a full remap |
+| **ingest** | Full bootstrap: one distilled standing document (problem, destination vs code, wiring) | First time (or reset) for a project — build the memory baseline |
 | **ship** | Branch from main, conventional commits, push, open a detailed GitHub PR via `gh` | Ready to land work — want a clean branch + PR, not a dump of diffs |
 | **simply** | Re-explain plans and designs in plain language, with analogies and simple diagrams | When a plan is correct but dense — `/simply` until it clicks |
 
 ### hydrate & ingest
 
-These two are a pair. **ingest** builds the map; **hydrate** keeps it fresh.
+These two are a pair. **ingest** writes one `{project}-standing` memory (`infer: false`, ≤990 words). **hydrate** rewrites that same id from a git waypoint. Do not spawn sibling memories (`*-codebase-map`, `*-decisions-*`, `*-scars`).
+
+Pin each product repo’s Hydra MCP to its own collection (slug). Personal prefs live in a `personal` collection, not in project standing.
 
 ```mermaid
 flowchart LR
   ingest["ingest\nfull bootstrap"] --> waypoint["git sync waypoint"]
-  waypoint --> hydrate["hydrate\nincremental sync"]
+  waypoint --> hydrate["hydrate\nrewrite standing"]
   hydrate --> waypoint
 ```
 
@@ -50,23 +52,26 @@ Slash-command style: `/simply`. Feed it a plan, design, or architecture dump; ge
 
 ## Install
 
-Clone, then symlink each skill into your agent skills directory:
+This git repo is the **only copy** of these skills. Other product repos should **not** vendor them under `.cursor/skills/`. Symlink once into your user skills dirs so Cursor / Claude / Codex all see the same files.
 
 ```bash
 git clone https://github.com/amanjotx/Agent-Skills.git
 cd Agent-Skills
 
-mkdir -p ~/.agents/skills
+mkdir -p ~/.agents/skills ~/.cursor/skills ~/.claude/skills
 
-ln -s "$(pwd)/skills/hydrate" ~/.agents/skills/hydrate
-ln -s "$(pwd)/skills/ingest"  ~/.agents/skills/ingest
-ln -s "$(pwd)/skills/ship"    ~/.agents/skills/ship
-ln -s "$(pwd)/skills/simply"  ~/.agents/skills/simply
+for s in hydrate ingest ship simply; do
+  ln -sfn "$(pwd)/skills/$s" ~/.agents/skills/$s
+  ln -sfn ~/.agents/skills/$s ~/.cursor/skills/$s
+  ln -sfn ~/.agents/skills/$s ~/.claude/skills/$s
+done
 ```
 
-**Cursor:** skills under `~/.agents/skills/<name>` (with a `SKILL.md` inside) are picked up for invocation. You can also open or `@`-reference a `SKILL.md` path directly if your setup prefers that.
+`ln -sfn` replaces an existing file or symlink. If `~/.agents/skills/<name>` is a **real directory** (a stale copy), remove it first: `rm -rf ~/.agents/skills/<name>`.
 
-**Claude / Codex:** same idea — symlink or copy `skills/<name>` into whatever skills path your client reads, or point the agent at the `SKILL.md` files in this repo.
+**Cursor** also reads `~/.cursor/skills/<name>/SKILL.md` (personal, every project) and `<repo>/.cursor/skills/` (project-only, shared with whoever clones that repo). Keep ingest/hydrate/ship/simply personal — they are your workflow, not Shepherd’s product.
+
+**Claude / Codex:** `~/.agents/skills` and `~/.claude/skills` are the usual user paths.
 
 Only symlink the skills you want. Skip `hydrate` / `ingest` if you aren't using Hydra DB.
 

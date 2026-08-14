@@ -1,231 +1,181 @@
 ---
 name: ingest
 description: >-
-  Deeply explore a codebase, map architecture and connections, and store a
-  durable project snapshot in Hydra DB with a git sync waypoint. Use when the
-  user says /ingest, ingest, map this repo into hydra, or asks for a full
-  project memory bootstrap.
+  Deeply explore a codebase — intent, problem, current standing, and wiring —
+  then persist one distilled Hydra standing document with a git sync waypoint.
+  Use when the user says /ingest, ingest, map this repo into hydra, or asks for
+  a full project memory bootstrap.
 disable-model-invocation: true
 ---
 
 # /ingest
 
-Build a high-fidelity mental model of the **current** repository, then persist
-a distilled project snapshot into Hydra DB so future agents can orient quickly.
+Build a high-fidelity mental model of the **current** repository **and the
+product it is trying to become**, then persist **one** standing document so a
+new agent can orient with a single inspect — without skimming folder names.
 
 This is the **full bootstrap** path (depth over speed). Prefer `/hydrate` for
-routine sync after a project map already exists.
+routine sync after `{project}-standing` already exists.
 
 Every successful ingest MUST record a **Sync waypoint** (commit hash + metadata)
-on the codebase map so later `/hydrate` runs can diff from a trusted benchmark.
+at the top of standing so later `/hydrate` runs can diff from a trusted benchmark.
 
 ## Hard rules
 
-- Code is the source of truth. Do not treat markdown docs as primary.
-- Do **not** open or dump large orientation docs by default
-  (`CONTEXT.md`, `PRODUCT.md`, `HANDOFF.md`, etc.). Use code + narrow Hydra reads.
+- **Code is implementation truth.** Product markdown is for _intent_. If they
+  conflict, standing must say so (code wins for “what exists”; dated product
+  locks win for “what we are building next” only when still explicitly locked).
+- **Do not dump** `CONTEXT.md`, `PRODUCT.md`, `HANDOFF.md`, or long spec files
+  into Hydra. You **may and should read them** (and similar `docs/*` locks) to
+  distill problem, audience, and destination into short standing sections.
 - Never store secrets, `.env` values, tokens, private keys, or credentials.
-- Write distilled maps — not file dumps, chat transcripts, or raw tree listings.
+- Not a file dump, chat transcript, session checkpoint, or raw tree listing.
 - Keep the skill project-agnostic. Infer names, stacks, and commands from the repo.
-- Prefer a few stable `source_id`s over many noisy one-off writes.
-- When Hydra already has project sources, inspect them, then **replace/supersede**
-  with a better map rather than appending contradictory duplicates.
-- Never invent a git sha. If git metadata is unavailable, omit the waypoint and
-  report that future hydrate efficiency will be limited.
+- **Exactly one project `source_id`:** `{project}-standing`. Never create
+  `{project}-codebase-map`, `{project}-product-locked`, `{project}-decisions-*`,
+  or `{project}-scars` as sibling memories.
+- Upsert that id. Delete leftover sibling ids after the write.
+- Ingest with **`infer: false`**. `infer: true` is only for messy chat/signal.
+- Stay **≤990 words** (Hydra `memory_tokens` per-request cap is 1000; cost ≈
+  whitespace-separated words). Fill that budget. Compress; do not split ids.
+  Too short to explain _why the product exists_ and _what is not built yet_ is
+  a failed ingest. Count words before upsert.
+- Personal prefs/skills belong in collection `personal`, not in project standing.
+- Never invent a git sha.
 
-## Source id conventions
+## Identity
 
-Derive `{project}` as a lowercase hyphenated slug from the repo/product name.
+Derive `{project}` as a lowercase hyphenated slug. Announce once
+(e.g. `Using standing id: shepherd-standing`).
 
-| `source_id`                  | Role                                           |
-| ---------------------------- | ---------------------------------------------- |
-| `{project}-codebase-map`     | Primary distilled architecture + sync waypoint |
-| `{project}-product-locked`   | Locked product decisions still true in code    |
-| `{project}-decisions-<area>` | Area ADRs when warranted                       |
-| `{project}-scars`            | Durable gotchas worth preserving               |
+This repo’s MCP must pin `HYDRADB_COLLECTION` to that slug.
 
-Write with `hydradb_ingest`: markdown, `infer: true`, `is_markdown: true`,
-stable `source_id`, clear `title`.
+## Quality bar (fail ingest if unmet)
 
-## Goals
+A new agent who only inspects standing must be able to answer:
 
-After `/ingest`, Hydra should answer:
+1. **Problem** — what operator/user failure this repo exists to fix
+2. **Product** — one-liner, who it’s for, what it is _not_
+3. **Now vs next** — what code actually does today vs locked destination slice
+4. **Layout + wiring** — packages, entrypoints, request/data/UI flows
+5. **Contracts** — invariants that break the product if ignored + verify commands
+6. **Decisions + scars** — why, wire path, what not to reintroduce
+7. **Waypoint** — git sha for `/hydrate`
 
-1. What the product/project is
-2. Repo layout and major modules
-3. How major pieces connect (request/data/UI/agent flows)
-4. What is shipped vs stubbed
-5. Key contracts, invariants, and verify commands
-6. Important locked decisions still reflected in code
-7. The git waypoint to use for efficient later hydrate
+If standing only lists folders and “auth exists,” it is a skim — go back to
+exploration before writing.
 
 ## Workflow
 
 ### 1. Identify the project
 
-Derive:
-
-- Display name (human title)
-- `{project}` slug for `source_id`s
-- Repo shape: monorepo vs single package
-- Primary languages/runtimes from manifests
-
-Announce the slug once before writing (e.g. `Using source prefix: shepherd-`).
+Display name, slug, monorepo vs single package, languages from manifests.
+Prefer **disk folder names** over README aliases.
 
 ### 2. Collect sync waypoint (git)
 
-Capture from the current checkout:
+- `git rev-parse HEAD` / `--short=12` / `--abbrev-ref HEAD`
+- `git log -1 --format=%s` and `%cI`
+- `git status --porcelain` (no secrets in memory)
 
-- full sha: `git rev-parse HEAD`
-- short sha: `git rev-parse --short=12 HEAD`
-- branch: `git rev-parse --abbrev-ref HEAD`
-- subject: `git log -1 --format=%s`
-- committed_at: `git log -1 --format=%cI`
+### 3. Check existing Hydra state
 
-Also note dirty worktree via `git status --porcelain` (do not put secrets in memory;
-mention only that uncommitted changes existed, if relevant).
+`hydradb_inspect` `{project}-standing` only. `hydradb_list` to find siblings to
+delete later. Do not query-scatter for orientation.
 
-### 3. Check existing Hydra state (narrow)
+### 4. Deep dive (required — not a catalog pass)
 
-- `hydradb_query` for `{project} codebase map architecture current standing`
-  (`max_results` ~3–5, mode `thinking` if reconciling)
-- `hydradb_list` / `hydradb_inspect` for:
-  `{project}-codebase-map`, `{project}-product-locked`
+Use Glob/Grep/Read and explore subagents. **Read real entrypoints and call
+chains**, not just package.json descriptions.
 
-Use this only to avoid blind duplication and to find stale entries to supersede.
+**Intent (distill, don’t paste)**
 
-### 4. Deep codebase exploration
+- Product/vision docs if present (`PRODUCT.md`, `HANDOFF.md`, locked `docs/*`)
+- README one-liner vs code reality
+- Audience, in/out of scope, differentiation — 8–15 lines max in standing
 
-Explore systematically. Use Glob/Grep/Read (and explore subagents when useful).
-Cover each layer that exists:
+**Implementation**
 
-1. **Root & tooling** — workspace manifests, package manager, CI, verify scripts
-2. **Apps / services / packages / crates** — role, stack, entrypoints, maturity
-3. **Domain surfaces** — routes, commands, UI shells, workers, queues, schemas
-4. **Wiring** — how requests/events move across boundaries; DI; shared contracts
-5. **Persistence & external systems** — DBs, KV, queues, third-party APIs (names only)
-6. **Auth / tenancy / security boundaries** if present
-7. **Gaps** — stubs, TODOs that affect architecture, missing clients/tests/docs
+1. Root & tooling — manifests, CI, verify scripts, pre-commit
+2. Every app/service/package/crate — role, stack, **maturity (real/stub)**
+3. Domain surfaces — routes, Tauri commands, UI gates, workers, queues, schema
+4. Wiring — who calls whom; auth cookies vs Bearer; local ports
+5. Persistence & externals — DB, KV, queues, third-party APIs (**names only**)
+6. Auth / tenancy / security if present
+7. Tests that exist vs missing
+8. Gaps — stubs, TODOs that change architecture
 
-Read enough real entrypoints and call chains to explain connections confidently.
-Do not pretend complete coverage from folder names alone.
+Stop when you can explain a request’s path across at least one **real** vertical
+(e.g. desktop login → API → DB) and name every **fake** surface an agent might
+mistake for shipped.
 
-### 5. Synthesize the map (before writing)
+### 5. Synthesize
 
-Produce an internal model with:
+Internal model before writing:
 
-- Shipping surface vs stubs
-- Connection narrative (who calls whom)
-- Invariants / contracts that agents must not break
-- Verify commands discovered from the repo
-- Open gaps worth remembering
-- Sync waypoint fields from step 2
+- Problem + thesis
+- Locked destination (clearly labeled **not shipped** if code disagrees)
+- Current standing
+- Layout + wiring + auth/API surface table if auth-heavy
+- Contracts, decisions, scars, gaps
+- Pointers to long specs (“read X when implementing Y”) — not the spec body
 
-Optional: one Mermaid or ASCII connection diagram in the stored map.
+### 6. Persist
 
-### 6. Persist to Hydra
-
-Use `hydradb_ingest` with `infer: true`, `is_markdown: true`.
-
-#### Required: `{project}-codebase-map`
-
-Title example: `{Project} — codebase map (source-derived)`
-
-Put **Sync waypoint first**, then the map body:
+`hydradb_ingest`: `source_id` `{project}-standing`, `infer: false`,
+`is_markdown: true`, title `{Project} — standing`.
 
 ```markdown
-# {Project} — codebase map (source-derived)
+# {Project} — standing
 
 ## Sync waypoint
 
-- commit: <full sha>
-- short: <12-char sha>
-- branch: <branch name>
-- subject: <one-line subject>
-- committed_at: <ISO from git>
-- captured_at: <ISO timestamp of this skill run>
+…
 
-## What it is
+## Problem
+
+… operator/user failure; why this repo exists
+
+## Product
+
+… one-liner, audience, not-for, principles still true
+
+## Destination (locked, not necessarily shipped)
+
+… next slice / architecture locks. Label clearly vs code.
+
+## Layout + wiring
+
+… packages, entrypoints, flows. Disk paths not README aliases.
+
+## Current standing
+
+… shipped vs stub
+
+## Contracts
+
+… invariants + verify commands
+
+## Decisions
+
+… dated Decision / Wire / Effect
+
+## Scars
 
 …
 
-## Tooling / verify
+## Gaps
 
 …
 
-## Layout
+## Spec pointers
 
-…
-
-## How it connects
-
-… (flows / boundaries / key call paths)
-
-## Shipping surface vs stubs
-
-…
-
-## Key entrypoints
-
-…
-
-## Notable contracts / invariants
-
-…
-
-## Known gaps
-
-…
+… path → when to open (implementers only)
 ```
 
-#### Usually include: `{project}-product-locked`
-
-Only decisions that are both product-important and still true in code.
-If uncertain, omit or mark as provisional — do not invent locks.
-
-#### Optional area sources
-
-Create `{project}-decisions-<area>` only when an area has durable decisions
-worth separate recall. Use:
-
-```markdown
-## Decision
-
-…
-
-## Why
-
-…
-
-## Wire
-
-…
-
-## Effect
-
-…
-
-## Alternatives considered
-
-…
-```
-
-#### Scars
-
-Add `{project}-scars` only for painful, reusable gotchas discovered during ingest.
-
-If ingest replaces an older wrong map, delete superseded memories/sources when
-clearly overturned (`hydradb_delete`).
+Then delete old sibling ids.
 
 ### 7. Report back
 
-Keep the chat summary short:
-
-- `{project}` slug used
-- Sources written/updated
-- Sync waypoint (short sha + branch + subject)
-- 5–10 line orientation blurb (what it is + shipping surface)
-- Highest-priority gaps
-- Anything uncertain / not captured
-
-Do not dump the full stored markdown unless asked.
+Slug, standing id, waypoint, 8–12 line orientation (problem + now + next),
+gaps, docs distilled vs skipped. Do not dump the full markdown unless asked.

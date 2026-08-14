@@ -1,152 +1,107 @@
 ---
 name: hydrate
 description: >-
-  Sync Hydra DB with the current codebase standing using a git sync waypoint:
-  explore code (delta-first when possible), compare to stored project memory,
-  then write missing or corrected details. Use when the user says /hydrate,
-  hydrate, sync hydra, refresh project memory, or asks to keep Hydra updated
-  with the repo.
+  Sync Hydra DB standing with the current codebase using a git sync waypoint:
+  explore code (delta-first when possible), compare to the one project memory,
+  rewrite it. Use when the user says /hydrate, hydrate, sync hydra, refresh
+  project memory, or asks to keep Hydra updated with the repo.
 disable-model-invocation: true
 ---
 
 # /hydrate
 
 Keep Hydra DB aligned with a fast-moving codebase. This is an **incremental
-sync**, not a first-principles rewrite.
+rewrite of one document**, not a first-principles ingest and not a scatter of
+new source ids.
 
 Default flow:
 
 1. Explore codebase (delta-first via Sync waypoint when valid)
-2. Fetch standing from Hydra
-3. Store missing details and correct stale information
+2. `hydradb_inspect` `{project}-standing`
+3. Patch sections in that document; upsert the same id
 4. Advance the Sync waypoint to current HEAD
 
-If no meaningful `{project}-codebase-map` exists, say so and recommend `/ingest`
+If `{project}-standing` is missing/empty, stop and recommend `/ingest`
 (or offer to run ingest if the user confirms).
 
 ## Hard rules
 
-- Code wins when Hydra and code disagree. Fix Hydra in the same run.
+- Code wins when Hydra and code disagree. Fix standing in the same run.
 - Do not dump large markdown docs into context or Hydra as raw paste.
 - Never store secrets, env values, tokens, or credentials.
-- Prefer updating stable sources over creating duplicate source ids.
-- Keep writes distilled and high-signal. Skip transient WIP noise.
-- Stay project-agnostic; infer `{project}` and verify commands from the repo.
-- Do not rewrite unrelated personal prefs sources.
+- **One project id only:** `{project}-standing`. Never create sibling ids.
+- Upsert with **`infer: false`**, `is_markdown: true`.
+- Keep writes distilled. Skip transient WIP and session checkpoints.
+- Do not rewrite personal-collection prefs while hydrating a project.
 - Never invent a git sha. Always refresh the waypoint after a successful sync
   when git is available.
-
-## Source id conventions
-
-| `source_id`                  | Role                                                 |
-| ---------------------------- | ---------------------------------------------------- |
-| `{project}-codebase-map`     | Primary map + Sync waypoint (required update target) |
-| `{project}-product-locked`   | Update only when locks changed and still true        |
-| `{project}-decisions-<area>` | Add/update when durable decisions appear             |
-| `{project}-scars`            | Add reusable gotchas when discovered                 |
+- Stay ≤990 words (Hydra `memory_tokens` cap is 1000/request). Preserve Problem / Product / Destination; refresh Current standing from code. Compress instead of splitting.
 
 ## What “in sync” means
 
-Hydra should reflect:
-
-- Current layout and entrypoints
-- Current shipping surface vs stubs
-- Current verify commands
-- Still-true locked decisions / overturned decisions cleaned up
-- Important new wiring agents would otherwise rediscover
-- An up-to-date Sync waypoint at current HEAD
+Standing reflects current layout, wiring, shipped vs stub, verify commands,
+still-true locks, dated decisions, scars, and a waypoint at current HEAD.
 
 ## Workflow
 
 ### 1. Identify project + current git tip
 
-- Derive display name + `{project}` slug
-- Collect current tip metadata (same fields as ingest waypoint):
-  - `git rev-parse HEAD`
-  - `git rev-parse --short=12 HEAD`
-  - `git rev-parse --abbrev-ref HEAD`
-  - `git log -1 --format=%s`
-  - `git log -1 --format=%cI`
-  - `git status --porcelain` (dirty worktree)
+- `{project}` slug; standing id `{project}-standing`
+- `git rev-parse HEAD` / `--short=12` / `--abbrev-ref HEAD`
+- `git log -1 --format=%s` and `%cI`
+- `git status --porcelain`
 
-### 2. Fetch Hydra standing + waypoint
+### 2. Fetch standing + waypoint
 
-- `hydradb_query` narrowly for this project’s map/standing
-  (`max_results` ~3–5; `thinking` when reconciling)
-- `hydradb_inspect` on `{project}-codebase-map`
-- Parse `## Sync waypoint` → previous `commit` sha (and branch/subject if present)
+- `hydradb_inspect` `{project}-standing` only (not a 3–5 hit query)
+- Parse `## Sync waypoint` → previous `commit` sha
 
-If the map is missing/empty: stop incremental sync and recommend `/ingest`.
+If missing/empty: recommend `/ingest`.
 
 ### 3. Decide exploration mode
 
-Validate the previous waypoint sha:
+Validate the previous waypoint sha exists and is an ancestor of `HEAD`.
 
-1. Exists in this repo
-2. Is an ancestor of current `HEAD`
-
-Then choose:
-
-| Condition                                                             | Mode                                                                     |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Valid waypoint ancestor of HEAD                                       | **Delta-first**                                                          |
-| Missing / invalid / not ancestor / history rewrite                    | **Broader standing pass**                                                |
-| Valid but very large delta (broad structural churn across many areas) | **Broader standing pass**, or recommend `/ingest` if map quality is poor |
-| HEAD matches waypoint and worktree is clean                           | Still do a light confirm pass; report “already at waypoint” if no drift  |
-| HEAD matches waypoint but worktree dirty                              | Delta includes dirty files                                               |
+| Condition                                          | Mode                                                     |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| Valid waypoint ancestor of HEAD                    | **Delta-first**                                          |
+| Missing / invalid / not ancestor / history rewrite | **Broader standing pass**                                |
+| Valid but very large structural delta              | Broader pass, or recommend `/ingest` if standing is poor |
+| HEAD matches waypoint, worktree clean              | Light confirm; report “already at waypoint” if no drift  |
+| HEAD matches waypoint, worktree dirty              | Delta includes dirty files                               |
 
 ### 4. Explore
 
-#### Delta-first (preferred)
+**Delta-first:** `git log --oneline <waypoint>..HEAD`, `git diff --stat` and
+material diffs, dirty paths, dependents/callers, verify scripts if those files
+changed.
 
-- `git log --oneline <waypoint-sha>..HEAD`
-- `git diff --stat <waypoint-sha>..HEAD`
-- `git diff <waypoint-sha>..HEAD` for material paths
-- Include dirty worktree paths from `git status`
-- Deep-read changed paths **and** their immediate dependents/callers
-- Re-check verify scripts / manifests if those files changed
+**Broader:** root manifests, central entrypoints, active product surfaces, CI
+scripts, added/removed apps/packages/crates.
 
-Delta is a prioritization aid, not a blinders rule: if changed files imply
-architecture/contract shifts, follow the connection far enough to keep the map honest.
+### 5. Diff: code vs standing
 
-#### Broader standing pass (fallback)
-
-JIT-read current standing:
-
-- Root manifests / workspace config
-- Central entrypoints
-- Active product surface modules
-- CI / package scripts for verify commands
-- Obvious added/removed apps, packages, or crates
-
-### 5. Diff: code vs Hydra
-
-Classify each claim / gap:
-
-| Status              | Action                                                              |
-| ------------------- | ------------------------------------------------------------------- |
-| Accurate            | Keep                                                                |
-| Missing             | Add to the appropriate source                                       |
-| Stale / wrong       | Correct via ingest update; delete superseded memories if overturned |
-| Provisional / noisy | Do not store                                                        |
-| Secret / tactical   | Do not store                                                        |
+| Status                                  | Action                                            |
+| --------------------------------------- | ------------------------------------------------- |
+| Accurate                                | Keep in the rewritten doc                         |
+| Missing                                 | Add to the right **section** of standing          |
+| Stale / wrong                           | Correct in standing; do not leave a second memory |
+| Provisional / noisy / secret / tactical | Do not store                                      |
 
 Focus on material drift: new modules, stubs that became real, contract changes,
-verify command changes, wiring changes, removed surfaces.
+verify commands, wiring, removed surfaces, overturned locks.
 
-### 6. Write updates + advance waypoint
+### 6. Write + advance waypoint
 
-Use `hydradb_ingest` (`infer: true`, `is_markdown: true`) with stable `source_id`s.
+Rebuild the full markdown (same section order as `/ingest`) and
+`hydradb_ingest` `{project}-standing` with `infer: false`.
 
-- Prefer refreshing `{project}-codebase-map` as a coherent updated snapshot when
-  drift is broad; keep sections consistent (no contradictory fragments).
-- Always rewrite `## Sync waypoint` to the **current HEAD** metadata from step 1
-  after a successful sync (even if content changes were small).
-- Update `{project}-product-locked` only when locks changed and remain true.
-- Add `{project}-decisions-<area>` when a durable decision is newly evident.
-- Delete clearly superseded memories/sources.
+Always rewrite `## Sync waypoint` to current HEAD metadata from step 1.
 
-Waypoint block to write:
+If leftover sibling ids exist (`*-codebase-map`, `*-decisions-*`, `*-scars`,
+`*-product-locked`), delete them.
+
+Waypoint block:
 
 ```markdown
 ## Sync waypoint
@@ -161,13 +116,6 @@ Waypoint block to write:
 
 ### 7. Report back
 
-Short summary only:
-
-- Mode used: delta-first vs broader (and why)
-- Previous waypoint → new waypoint (`short` shas + subject)
-- Commit range covered when delta-first (`old..HEAD`, count if useful)
-- Sources updated (and any deletes)
-- Key corrections (Hydra was wrong → code truth)
-- New facts added
-- Intentionally skipped items
-- Whether a deeper `/ingest` is recommended
+Short: mode, previous → new waypoint, commit range if delta-first, sections
+changed, corrections (Hydra was wrong → code), skipped items, whether `/ingest`
+is recommended.
