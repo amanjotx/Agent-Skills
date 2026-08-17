@@ -2,8 +2,8 @@
 name: hydrate
 description: >-
   Sync Hydra DB standing with the current codebase using a git sync waypoint:
-  explore code (delta-first when possible), compare to the one project memory,
-  rewrite it. Use when the user says /hydrate, hydrate, sync hydra, refresh
+  explore code (delta-first when possible), compare to the one project knowledge
+  source, rewrite it. Use when the user says /hydrate, hydrate, sync hydra, refresh
   project memory, or asks to keep Hydra updated with the repo.
 disable-model-invocation: true
 ---
@@ -18,7 +18,8 @@ Default flow:
 
 1. Explore codebase (delta-first via Sync waypoint when valid)
 2. `hydradb_inspect` `{project}-standing`
-3. Patch sections in that document; upsert the same id
+3. Patch sections in that document; ingest the rewritten doc as **knowledge**
+   under the same id
 4. Advance the Sync waypoint to current HEAD
 
 If `{project}-standing` is missing/empty, stop and recommend `/ingest`
@@ -29,13 +30,18 @@ If `{project}-standing` is missing/empty, stop and recommend `/ingest`
 - Code wins when Hydra and code disagree. Fix standing in the same run.
 - Do not dump large markdown docs into context or Hydra as raw paste.
 - Never store secrets, env values, tokens, or credentials.
-- **One project id only:** `{project}-standing`. Never create sibling ids.
-- Upsert with **`infer: false`**, `is_markdown: true`.
+- **One project id only:** `{project}-standing`. Never create sibling ids
+  (`*-codebase-map`, `*-decisions-*`, `*-scars`, `*-product-locked`); delete
+  those if they reappear.
+- Upsert standing as **knowledge** (`infer: false`). MCP `hydradb_ingest` is
+  the memory store (1000-token cap, replace-not-append) — do not put standing
+  there.
 - Keep writes distilled. Skip transient WIP and session checkpoints.
 - Do not rewrite personal-collection prefs while hydrating a project.
 - Never invent a git sha. Always refresh the waypoint after a successful sync
   when git is available.
-- Stay ≤990 words (Hydra `memory_tokens` cap is 1000/request). Preserve Problem / Product / Destination; refresh Current standing from code. Compress instead of splitting.
+- Preserve Problem / Product / Destination; refresh Current standing from code.
+  Do not strip contracts to fit a single request.
 
 ## What “in sync” means
 
@@ -93,8 +99,8 @@ verify commands, wiring, removed surfaces, overturned locks.
 
 ### 6. Write + advance waypoint
 
-Rebuild the full markdown (same section order as `/ingest`) and
-`hydradb_ingest` `{project}-standing` with `infer: false`.
+Rebuild the full markdown (same section order as `/ingest`) and ingest
+`{project}-standing` as **knowledge** with `infer: false`.
 
 Always rewrite `## Sync waypoint` to current HEAD metadata from step 1.
 

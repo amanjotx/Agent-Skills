@@ -2,9 +2,9 @@
 name: ingest
 description: >-
   Deeply explore a codebase — intent, problem, current standing, and wiring —
-  then persist one distilled Hydra standing document with a git sync waypoint.
-  Use when the user says /ingest, ingest, map this repo into hydra, or asks for
-  a full project memory bootstrap.
+  then persist one Hydra standing document with a git sync waypoint. Use when
+  the user says /ingest, ingest, map this repo into hydra, or asks for a full
+  project memory bootstrap.
 disable-model-invocation: true
 ---
 
@@ -31,15 +31,17 @@ at the top of standing so later `/hydrate` runs can diff from a trusted benchmar
 - Never store secrets, `.env` values, tokens, private keys, or credentials.
 - Not a file dump, chat transcript, session checkpoint, or raw tree listing.
 - Keep the skill project-agnostic. Infer names, stacks, and commands from the repo.
-- **Exactly one project `source_id`:** `{project}-standing`. Never create
-  `{project}-codebase-map`, `{project}-product-locked`, `{project}-decisions-*`,
-  or `{project}-scars` as sibling memories.
-- Upsert that id. Delete leftover sibling ids after the write.
-- Ingest with **`infer: false`**. `infer: true` is only for messy chat/signal.
-- Stay **≤990 words** (Hydra `memory_tokens` per-request cap is 1000; cost ≈
-  whitespace-separated words). Fill that budget. Compress; do not split ids.
-  Too short to explain _why the product exists_ and _what is not built yet_ is
-  a failed ingest. Count words before upsert.
+- **Exactly one project `source_id`:** `{project}-standing`, stored as
+  **knowledge** (shared project doc). Never create `{project}-codebase-map`,
+  `{project}-product-locked`, `{project}-decisions-*`, or `{project}-scars`.
+- Upsert that id as knowledge. Delete leftover sibling ids, and any leftover
+  **memory** with the same id.
+- Standing writes: `type=knowledge`, **`infer: false`**. MCP `hydradb_ingest`
+  writes the **memory** store (1000 `memory_tokens` / request, replace-not-append)
+  — do not put standing there. `infer: true` is only for messy chat/signal
+  into memory (e.g. collection `personal`).
+  Too short to explain _why the product exists_ and _what is not built yet_
+  is a failed ingest.
 - Personal prefs/skills belong in collection `personal`, not in project standing.
 - Never invent a git sha.
 
@@ -122,58 +124,39 @@ Internal model before writing:
 
 ### 6. Persist
 
-`hydradb_ingest`: `source_id` `{project}-standing`, `infer: false`,
-`is_markdown: true`, title `{Project} — standing`.
+Write **one** markdown document (title `{Project} — standing`). Ingest as
+**knowledge** under `source_id` `{project}-standing`, `infer: false`. Do not
+use memory ingest / sequential memory chunks for standing. Do not invent extra
+ids.
 
 ```markdown
 # {Project} — standing
 
 ## Sync waypoint
 
-…
-
 ## Problem
-
-… operator/user failure; why this repo exists
 
 ## Product
 
-… one-liner, audience, not-for, principles still true
-
 ## Destination (locked, not necessarily shipped)
-
-… next slice / architecture locks. Label clearly vs code.
 
 ## Layout + wiring
 
-… packages, entrypoints, flows. Disk paths not README aliases.
-
 ## Current standing
-
-… shipped vs stub
 
 ## Contracts
 
-… invariants + verify commands
-
 ## Decisions
-
-… dated Decision / Wire / Effect
 
 ## Scars
 
-…
-
 ## Gaps
 
-…
-
 ## Spec pointers
-
-… path → when to open (implementers only)
 ```
 
-Then delete old sibling ids.
+Then delete leftover sibling ids (`*-codebase-map`, `*-decisions-*`, `*-scars`,
+`*-product-locked`).
 
 ### 7. Report back
 
