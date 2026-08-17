@@ -1,6 +1,6 @@
 # Agent Skills
 
-Self-authored Cursor / Claude / Codex skills I actually use — memory sync, shipping PRs, and explaining plans without the fog.
+Cursor / Claude / Codex skills I actually use — memory sync, shipping PRs, explaining plans, and a vendored Oxlint installer.
 
 **Author:** [Amanjot Singh](https://github.com/amanjotx)
 
@@ -22,6 +22,7 @@ Who it's for: people running Cursor (or Claude / Codex with skills support) who 
 | **ingest** | Full bootstrap: one distilled standing document (problem, destination vs code, wiring) | First time (or reset) for a project — build the memory baseline |
 | **ship** | Branch from main, conventional commits, push, open a detailed GitHub PR via `gh` | Ready to land work — want a clean branch + PR, not a dump of diffs |
 | **simply** | Re-explain plans and designs in plain language, with analogies and simple diagrams | When a plan is correct but dense — `/simply` until it clicks |
+| **anti-slop** | Vendor [Dillon Mulroy](https://github.com/dmmulroy)'s Oxlint plugin into a TypeScript repo | Adding anti-slop lint rules to a JS/TS project — not this skills repo |
 
 ### hydrate & ingest
 
@@ -48,6 +49,12 @@ Uses the GitHub CLI (`gh`). Expects you authenticated and in a git repo. Handles
 
 Slash-command style: `/simply`. Feed it a plan, design, or architecture dump; get back plain language, analogies, and light diagrams.
 
+### anti-slop
+
+Vendored from [dmmulroy/anti-slop](https://github.com/dmmulroy/anti-slop) by [Dillon Mulroy](https://github.com/dmmulroy) (MIT). Original skill name was `install-anti-slop`; the folder here is `anti-slop`.
+
+This skill does **not** lint this repo. Invoke it inside a TypeScript or JavaScript product repo. It copies the bundled Oxlint plugin to `tools/oxlint/anti-slop/`, installs `oxlint` + `@oxlint/plugins`, and wires the config. Do not run the installer against Agent-Skills.
+
 ---
 
 ## Install
@@ -60,7 +67,7 @@ cd Agent-Skills
 
 mkdir -p ~/.agents/skills ~/.cursor/skills ~/.claude/skills
 
-for s in hydrate ingest ship simply; do
+for s in hydrate ingest ship simply anti-slop; do
   ln -sfn "$(pwd)/skills/$s" ~/.agents/skills/$s
   ln -sfn ~/.agents/skills/$s ~/.cursor/skills/$s
   ln -sfn ~/.agents/skills/$s ~/.claude/skills/$s
@@ -69,7 +76,7 @@ done
 
 `ln -sfn` replaces an existing file or symlink. If `~/.agents/skills/<name>` is a **real directory** (a stale copy), remove it first: `rm -rf ~/.agents/skills/<name>`.
 
-**Cursor** also reads `~/.cursor/skills/<name>/SKILL.md` (personal, every project) and `<repo>/.cursor/skills/` (project-only, shared with whoever clones that repo). Keep ingest/hydrate/ship/simply personal — they are your workflow, not Shepherd’s product.
+**Cursor** also reads `~/.cursor/skills/<name>/SKILL.md` (personal, every project) and `<repo>/.cursor/skills/` (project-only, shared with whoever clones that repo). Keep these skills personal — they are your workflow, not Shepherd’s product.
 
 **Claude / Codex:** `~/.agents/skills` and `~/.claude/skills` are the usual user paths.
 
@@ -85,6 +92,11 @@ skills/
   ingest/SKILL.md
   ship/SKILL.md
   simply/SKILL.md
+  anti-slop/          # vendored from dmmulroy/anti-slop (Dillon Mulroy)
+    SKILL.md
+    LICENSE
+    scripts/install.mjs
+    assets/anti-slop/ # Oxlint plugin copied into TS repos
 ```
 
 ---
@@ -92,3 +104,5 @@ skills/
 ## License
 
 [MIT](./LICENSE) © 2026 Amanjot Singh
+
+`skills/anti-slop` is [MIT](./skills/anti-slop/LICENSE) © 2026 [Dillon Mulroy](https://github.com/dmmulroy) — [dmmulroy/anti-slop](https://github.com/dmmulroy/anti-slop).
