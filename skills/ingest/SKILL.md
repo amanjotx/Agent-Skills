@@ -36,12 +36,12 @@ at the top of standing so later `/hydrate` runs can diff from a trusted benchmar
   `{project}-product-locked`, `{project}-decisions-*`, or `{project}-scars`.
 - Upsert that id as knowledge. Delete leftover sibling ids, and any leftover
   **memory** with the same id.
-- Standing writes: `type=knowledge`, **`infer: false`**. MCP `hydradb_ingest`
-  writes the **memory** store (1000 `memory_tokens` / request, replace-not-append)
-  — do not put standing there. `infer: true` is only for messy chat/signal
-  into memory (e.g. collection `personal`).
-  Too short to explain _why the product exists_ and _what is not built yet_
-  is a failed ingest.
+- Standing writes: **knowledge**, **`infer: false`**. Bare `hydradb ingest
+--text` writes the **memory** store (1000 `memory_tokens` / request,
+  replace-not-append) — do not put standing there. `infer: true` is only for
+  messy chat/signal into memory (e.g. collection `personal`). Too short to
+  explain _why the product exists_ and _what is not built yet_ is a failed
+  ingest.
 - Personal prefs/skills belong in collection `personal`, not in project standing.
 - Never invent a git sha.
 
@@ -50,7 +50,26 @@ at the top of standing so later `/hydrate` runs can diff from a trusted benchmar
 Derive `{project}` as a lowercase hyphenated slug. Announce once
 (e.g. `Using standing id: shepherd-standing`).
 
-This repo’s MCP must pin `HYDRADB_COLLECTION` to that slug.
+Pin collection with `--collection {project}` on every CLI call (or source a
+repo-local `.cursor/hydradb.project.env` for this session). Never export
+`HYDRADB_COLLECTION` in the shell profile. Do not use Hydra MCP.
+
+## Transport (CLI)
+
+Use the `hydradb` CLI. `HYDRADB_API_KEY` and `HYDRADB_DATABASE` come from the
+shell. Always pass `--collection {project}`.
+
+```bash
+hydradb inspect {project}-standing --collection {project}
+hydradb list --kind knowledge --collection {project}
+hydradb ingest --kind knowledge --text "…" \
+  --source-id {project}-standing --title "{Project} — standing" \
+  --no-infer --collection {project}
+hydradb delete ID --kind knowledge --collection {project} --yes
+```
+
+File-path ingest cannot set `--source-id`; standing must use `--kind knowledge
+--text`. Do not pipe a long file into bare `hydradb ingest` (that is memory).
 
 ## Quality bar (fail ingest if unmet)
 
@@ -82,8 +101,9 @@ Prefer **disk folder names** over README aliases.
 
 ### 3. Check existing Hydra state
 
-`hydradb_inspect` `{project}-standing` only. `hydradb_list` to find siblings to
-delete later. Do not query-scatter for orientation.
+`hydradb inspect {project}-standing --collection {project}` only.
+`hydradb list --kind knowledge --collection {project}` (and `--kind memory` if
+needed) to find siblings to delete later. Do not query-scatter for orientation.
 
 ### 4. Deep dive (required — not a catalog pass)
 
@@ -125,9 +145,15 @@ Internal model before writing:
 ### 6. Persist
 
 Write **one** markdown document (title `{Project} — standing`). Ingest as
-**knowledge** under `source_id` `{project}-standing`, `infer: false`. Do not
+**knowledge** under `source_id` `{project}-standing`, `--no-infer`. Do not
 use memory ingest / sequential memory chunks for standing. Do not invent extra
 ids.
+
+```bash
+hydradb ingest --kind knowledge --text "$(cat standing.md)" \
+  --source-id {project}-standing --title "{Project} — standing" \
+  --no-infer --collection {project}
+```
 
 ```markdown
 # {Project} — standing

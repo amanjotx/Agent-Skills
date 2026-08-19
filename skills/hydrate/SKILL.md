@@ -17,9 +17,9 @@ new source ids.
 Default flow:
 
 1. Explore codebase (delta-first via Sync waypoint when valid)
-2. `hydradb_inspect` `{project}-standing`
+2. `hydradb inspect {project}-standing --collection {project}`
 3. Patch sections in that document; ingest the rewritten doc as **knowledge**
-   under the same id
+   under the same id (`--kind knowledge --no-infer --collection {project}`)
 4. Advance the Sync waypoint to current HEAD
 
 If `{project}-standing` is missing/empty, stop and recommend `/ingest`
@@ -33,9 +33,11 @@ If `{project}-standing` is missing/empty, stop and recommend `/ingest`
 - **One project id only:** `{project}-standing`. Never create sibling ids
   (`*-codebase-map`, `*-decisions-*`, `*-scars`, `*-product-locked`); delete
   those if they reappear.
-- Upsert standing as **knowledge** (`infer: false`). MCP `hydradb_ingest` is
-  the memory store (1000-token cap, replace-not-append) — do not put standing
-  there.
+- Upsert standing as **knowledge** (`--kind knowledge`, `--no-infer`). Bare
+  `hydradb ingest --text` is the memory store (1000-token cap,
+  replace-not-append) — do not put standing there. Use the `hydradb` CLI with
+  `--collection {project}`. Do not use Hydra MCP. Never export
+  `HYDRADB_COLLECTION` globally.
 - Keep writes distilled. Skip transient WIP and session checkpoints.
 - Do not rewrite personal-collection prefs while hydrating a project.
 - Never invent a git sha. Always refresh the waypoint after a successful sync
@@ -53,13 +55,15 @@ still-true locks, dated decisions, scars, and a waypoint at current HEAD.
 ### 1. Identify project + current git tip
 
 - `{project}` slug; standing id `{project}-standing`
+- Always pass `--collection {project}` (do not use Hydra MCP)
 - `git rev-parse HEAD` / `--short=12` / `--abbrev-ref HEAD`
 - `git log -1 --format=%s` and `%cI`
 - `git status --porcelain`
 
 ### 2. Fetch standing + waypoint
 
-- `hydradb_inspect` `{project}-standing` only (not a 3–5 hit query)
+- `hydradb inspect {project}-standing --collection {project}` only (not a
+  3–5 hit query)
 - Parse `## Sync waypoint` → previous `commit` sha
 
 If missing/empty: recommend `/ingest`.
@@ -100,7 +104,13 @@ verify commands, wiring, removed surfaces, overturned locks.
 ### 6. Write + advance waypoint
 
 Rebuild the full markdown (same section order as `/ingest`) and ingest
-`{project}-standing` as **knowledge** with `infer: false`.
+`{project}-standing` as **knowledge** with `--no-infer`:
+
+```bash
+hydradb ingest --kind knowledge --text "$(cat standing.md)" \
+  --source-id {project}-standing --title "{Project} — standing" \
+  --no-infer --collection {project}
+```
 
 Always rewrite `## Sync waypoint` to current HEAD metadata from step 1.
 

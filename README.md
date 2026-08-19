@@ -16,19 +16,19 @@ Who it's for: people running Cursor (or Claude / Codex with skills support) who 
 
 ## Skills
 
-| Skill | What it does | When to use |
-| --- | --- | --- |
-| **hydrate** | Incremental rewrite of the one `{project}-standing` Hydra memory from a git waypoint | After you've already ingested — keep standing current without a full remap |
-| **ingest** | Full bootstrap: one distilled standing document (problem, destination vs code, wiring) | First time (or reset) for a project — build the memory baseline |
-| **ship** | Branch from main, conventional commits, push, open a detailed GitHub PR via `gh` | Ready to land work — want a clean branch + PR, not a dump of diffs |
-| **simply** | Re-explain plans and designs in plain language, with analogies and simple diagrams | When a plan is correct but dense — `/simply` until it clicks |
-| **anti-slop** | Vendor [Dillon Mulroy](https://github.com/dmmulroy)'s Oxlint plugin into a TypeScript repo | Adding anti-slop lint rules to a JS/TS project — not this skills repo |
+| Skill         | What it does                                                                               | When to use                                                                |
+| ------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| **hydrate**   | Incremental rewrite of the one `{project}-standing` Hydra knowledge source from a git waypoint | After you've already ingested — keep standing current without a full remap |
+| **ingest**    | Full bootstrap: one distilled standing document (problem, destination vs code, wiring)     | First time (or reset) for a project — build the memory baseline            |
+| **ship**      | Branch from main, conventional commits, push, open a detailed GitHub PR via `gh`           | Ready to land work — want a clean branch + PR, not a dump of diffs         |
+| **simply**    | Re-explain plans and designs in plain language, with analogies and simple diagrams         | When a plan is correct but dense — `/simply` until it clicks               |
+| **anti-slop** | Vendor [Dillon Mulroy](https://github.com/dmmulroy)'s Oxlint plugin into a TypeScript repo | Adding anti-slop lint rules to a JS/TS project — not this skills repo      |
 
 ### hydrate & ingest
 
-These two are a pair. **ingest** writes one `{project}-standing` memory (`infer: false`, ≤990 words). **hydrate** rewrites that same id from a git waypoint. Do not spawn sibling memories (`*-codebase-map`, `*-decisions-*`, `*-scars`).
+These two are a pair. **ingest** writes one `{project}-standing` **knowledge** source (`--no-infer`). **hydrate** rewrites that same id from a git waypoint. Do not spawn sibling ids (`*-codebase-map`, `*-decisions-*`, `*-scars`).
 
-Pin each product repo’s Hydra MCP to its own collection (slug). Personal prefs live in a `personal` collection, not in project standing.
+Use the **`hydradb` CLI** (not MCP). Pass `--collection {project}` on every call — never set `HYDRADB_COLLECTION` in the shell profile. Personal prefs live in a `personal` collection, not in project standing.
 
 ```mermaid
 flowchart LR
@@ -37,7 +37,7 @@ flowchart LR
   hydrate --> waypoint
 ```
 
-Both need [Hydra DB MCP](https://docs.hydradb.com/plugins/mcp) configured in your agent environment. Configure that separately — this repo does not ship credentials or MCP config.
+Both need the [HydraDB CLI](https://docs.hydradb.com/plugins/cli) (`hydradb`). Put `HYDRADB_API_KEY` and `HYDRADB_DATABASE` in `~/.zshenv` (Cursor agents skip `~/.zshrc`). This repo does not ship credentials.
 
 `hydrate` and `ingest` are typically `disable-model-invocation: true` — invoke them explicitly (slash / skill pick), not as silent auto-tools.
 
